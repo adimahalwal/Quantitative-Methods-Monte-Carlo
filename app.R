@@ -1,8 +1,5 @@
 # This is a Shiny web application. You can run the application by clicking 
 # the 'Run App' button above.
-#
-# Find out more about building applications with Shiny here:
-# https://shiny.posit.co/
 
 library(shiny)
 library(tidyverse)
@@ -10,7 +7,7 @@ library(MASS)
 
 # Define UI
 ui <- fluidPage(
-  titlePanel("Monte Carlo Simulation of OLS Estimates with Multiple Parameter Sets (procedure 2)"),
+  titlePanel("Monte Carlo Simulation of OLS Estimates with Multiple Parameter Sets (procedure 3)"),
   sidebarLayout(
     sidebarPanel(
       h4("Simulation Settings"),
@@ -68,14 +65,26 @@ server <- function(input, output) {
       y <- beta_0 + beta_1 * x[,1] + beta_2 * x[,2] + epsilon
       
       model <- lm(y ~ x[,1] + x[,2])
-      summary_model <- summary(model)
+      model_summary <- summary(model)
+      p_value <- model_summary$coefficients[3, "Pr(>|t|)"]
       
-      beta_0_estimates[i] <- coef(model)[1]
-      beta_1_estimates[i] <- coef(model)[2]
-      beta_2_estimates[i] <- coef(model)[3]
-      r_squared_values[i] <- summary_model$r.squared
-      t_statistics_beta1[i] <- summary_model$coefficients[2, "t value"]
-      p_values_beta1[i] <- summary_model$coefficients[2, "Pr(>|t|)"]
+      # Check that p_value is a single value
+      if (length(p_value) == 1 && p_value < 0.05) {
+        beta_0_estimates[i] <- coef(model)[1]
+        beta_1_estimates[i] <- coef(model)[2]
+        beta_2_estimates[i] <- coef(model)[3]
+        r_squared_values[i] <- model_summary$r.squared
+        t_statistics_beta1[i] <- model_summary$coefficients[2, "t value"]
+        p_values_beta1[i] <- model_summary$coefficients[2, "Pr(>|t|)"]
+      } else {
+        model <- lm(y ~ x[, 1])  # Adjust model to exclude x[,2]
+        model_summary <- summary(model)
+        beta_0_estimates[i] <- coef(model)[1]
+        beta_1_estimates[i] <- coef(model)[2]
+        r_squared_values[i] <- model_summary$r.squared
+        t_statistics_beta1[i] <- model_summary$coefficients[2, "t value"]
+        p_values_beta1[i] <- model_summary$coefficients[2, "Pr(>|t|)"]
+      }
       
       last_model <- model  # Store the last model
     }
@@ -96,7 +105,7 @@ server <- function(input, output) {
       sd_beta_1 = sd(beta_1_estimates),
       sd_beta_2 = sd(beta_2_estimates),
       sd_r_squared = sd(r_squared_values),
-      last_model = last_model
+      last_model = last_model  # Return the last model
     )
   }
   
@@ -135,14 +144,8 @@ server <- function(input, output) {
     cat("Summary of the last model from simulation for Parameter Set 1:\n")
     print(summary(results$set1$last_model))
     
-    cat("ANOVA of the last model from simulation for Parameter Set 1:\n")
-    print(anova(results$set1$last_model))
-    
-    cat("Summary of the last model from simulation for Parameter Set 2:\n")
+    cat("\nSummary of the last model from simulation for Parameter Set 2:\n")
     print(summary(results$set2$last_model))
-    
-    cat("ANOVA of the last model from simulation for Parameter Set 2:\n")
-    print(anova(results$set2$last_model))
   })
   
   # Plot density plots with different curves for each parameter set
@@ -150,12 +153,6 @@ server <- function(input, output) {
     results <- simulation_results()
     
     par(mfrow = c(1, 4), oma = c(0, 0, 2, 0), mar = c(5, 4, 4, 2))
-    
-    # Density plot for beta_1 t-statistics
-    plot(density(results$set1$t_statistics_beta1), col = "blue", lwd = 2,
-         main = "Density of t-Statistics for beta_1", xlab = "t-Statistic (beta_1)")
-    lines(density(results$set2$t_statistics_beta1), col = "red", lwd = 2)
-    legend("topright", legend = c("Set 1", "Set 2"), col = c("blue", "red"), lwd = 2)
     
     # Density plot for rejection rate of beta_1
     barplot(c(results$set1$rejection_rate_beta1, results$set2$rejection_rate_beta1),
@@ -174,8 +171,14 @@ server <- function(input, output) {
     lines(density(results$set2$beta_1_estimates), col = "red", lwd = 2)
     legend("topright", legend = c("Set 1", "Set 2"), col = c("blue", "red"), lwd = 2)
     
+    # Density plot for beta_2 estimates
+    plot(density(results$set1$beta_2_estimates), col = "blue", lwd = 2,
+         main = "Density of Slope Estimates (beta_2)", xlab = "Estimated beta_2")
+    lines(density(results$set2$beta_2_estimates), col = "red", lwd = 2)
+    legend("topright", legend = c("Set 1", "Set 2"), col = c("blue", "red"), lwd = 2)
   }, width = "auto", height = "auto")
 }
 
 # Run the application
 shinyApp(ui = ui, server = server)
+
